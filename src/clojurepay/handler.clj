@@ -1,5 +1,6 @@
 (ns clojurepay.handler
-  (:use compojure.core)
+  (:use compojure.core
+        clojurepay.config)
   (:require [compojure.handler :as handler]
             [compojure.route :as route]))
 
