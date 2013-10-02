@@ -1,19 +1,27 @@
 <div class='row'>
+
   <div class='span12'>
 
-    <form class='form-horizontal'>
+    <form class='form-horizontal' method="POST" action="">
+
+      <div class='control-group'>
+        <label class='control-label' for='email'>Name</label>
+        <div class='controls'>
+          <input type='text' name='name' id='name' placeholder='Your name'>
+        </div>
+      </div>
 
       <div class='control-group'>
         <label class='control-label' for='email'>Email</label>
         <div class='controls'>
-          <input type='text' id='email' placeholder='Email'>
+          <input type='text' name='email' id='email' placeholder='Email'>
         </div>
       </div>
 
       <div class='control-group'>
         <label class='control-label' for='password'>Password</label>
         <div class='controls'>
-          <input type='password' id='password' placeholder='Password'>
+          <input type='password' name='password' id='password' placeholder='Password'>
         </div>
       </div>
 

@@ -4,6 +4,7 @@
   :dependencies [[org.clojure/clojure "1.5.1"]
                  [compojure "1.1.5"]
                  [enlive "1.1.4"]
+                 [clojurewerkz/scrypt "1.0.0"]
                  [clj-http "0.7.7"]
                  [com.novemberain/monger "1.5.0"]]
   :plugins [[lein-ring "0.8.5"]]

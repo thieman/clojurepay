@@ -1,3 +1,7 @@
 #body-content {
 	padding-top: 60px;
 }
+
+.alert-hidden {
+	display: none;
+}
