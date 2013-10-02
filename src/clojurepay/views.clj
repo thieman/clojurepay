@@ -14,7 +14,7 @@
 
 (defsnippet navbar "public/templates/navbar.html" [:.navbar] [session]
   [:#navbar-right] (if (logged-in? session)
-                     (append (navbar-link "logout" "/do-logout" "Log Out"))
+                     (append (navbar-link "logout" "/logout" "Log Out"))
                      (append (navbar-link "login" "/login" "Log In"))))
 
 (defsnippet footer "public/templates/footer.html" [root] [] identity)
@@ -55,7 +55,8 @@
 
 (defn do-login-view [session params]
   (if (password-is-correct? (:email params) (:password params))
-    (do
-      (login-user session)
-      (redirect-to "/"))
+    (assoc (redirect-to "/") :session (login-user session))
     (login-view session "Incorrect email or password.")))
+
+(defn logout-view [session]
+  (assoc (redirect-to "/") :session nil))

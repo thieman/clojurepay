@@ -16,6 +16,7 @@
   (POST "/do-signup" {session :session params :params} (do-signup-view session params))
   (GET "/login" {session :session} (login-view session))
   (POST "/do-login" {session :session params :params} (do-login-view session params))
+  (GET "/logout" {session :session} (do-logout-view session))
   (route/resources "/static/")
   (route/not-found "Not Found"))
 
