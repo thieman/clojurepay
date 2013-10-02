@@ -1,12 +1,14 @@
 (ns clojurepay.handler
   (:use compojure.core
-        clojurepay.config)
+        [clojurepay.config :only [config]]
+        clojurepay.views)
   (:require [compojure.handler :as handler]
             [compojure.route :as route]))
 
 (defroutes app-routes
-  (GET "/" [] "Hello World")
-  (route/resources "/")
+  (GET "/" [] (index-view))
+  (GET "/signup" [] (signup-view))
+  (route/resources "/static/")
   (route/not-found "Not Found"))
 
 (def app
