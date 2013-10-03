@@ -1,11 +1,13 @@
 (ns clojurepay.config)
 
-(def config {:client_id (-> (clojure.java.io/resource "private/client_id")
-                            (slurp)
-                            (clojure.string/trimr)
-                            (Integer/parseInt))
-             :client_secret (-> (clojure.java.io/resource "private/client_secret")
-                                (slurp)
-                                (clojure.string/trimr))
+(defn read-file [filepath]
+  (-> (clojure.java.io/resource filepath)
+      (slurp)
+      (clojure.string/trimr)))
+
+(def config {:app-secret (read-file "private/app_secret")
+             :venmo-client-id (-> (read-file "private/client_id")
+                                  (Integer/parseInt))
+             :venmo-client-secret (read-file "private/client_secret")
              :mongo-host "127.0.0.1"
              :mongo-port 27017})

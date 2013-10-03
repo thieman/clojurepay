@@ -1,5 +1,6 @@
 (ns clojurepay.views
   (:use [net.cgrand.enlive-html]
+        sandbar.stateful-session
         [clojurepay.config :only [config]]
         clojurepay.auth)
   (:require [monger.collection :as mc]))
@@ -12,8 +13,8 @@
   [:a] (do-> (set-attr :href href)
              (content text)))
 
-(defsnippet navbar "public/templates/navbar.html" [:.navbar] [session]
-  [:#navbar-right] (if (logged-in? session)
+(defsnippet navbar "public/templates/navbar.html" [:.navbar] []
+  [:#navbar-right] (if (logged-in?)
                      (append (navbar-link "logout" "/logout" "Log Out"))
                      (append (navbar-link "login" "/login" "Log In"))))
 
@@ -23,9 +24,9 @@
   [:.alert] (do-> (add-class (str "alert-" (if (nil? msg) "hidden" class)))
                   (content msg)))
 
-(deftemplate base-template "public/templates/base.html" [session body-content]
+(deftemplate base-template "public/templates/base.html" [body-content]
   [:#body-content] (content body-content)
-  [:#navbar] (substitute (navbar session))
+  [:#navbar] (substitute (navbar))
   [:#footer] (substitute (footer)))
 
 (defsnippet signup-form "public/templates/signup-form.html" [:form] [form-action msg]
@@ -36,27 +37,38 @@
   [:form] (do-> (prepend (alert msg "warning"))
                 (set-attr :action form-action)))
 
-(defn session-print-view [session] (base-template session))
+(defn index-redirect []
+  (if (logged-in?)
+    (redirect-to "/circles")
+    (redirect-to "/signup")))
+
+(defn session-print-view [] (base-template (session-get :logged-in)))
 
 (defn signup-view
-  ([session] (signup-view session nil))
-  ([session msg] (base-template session (signup-form "do-signup" msg))))
+  ([] (signup-view nil))
+  ([msg] (base-template (signup-form "do-signup" msg))))
 
 (defn login-view
-  ([session] (login-view session nil))
-  ([session msg] (base-template session (login-form "do-login" msg))))
+  ([] (login-view nil))
+  ([msg] (base-template (login-form "do-login" msg))))
 
-(defn do-signup-view [session params]
+(defn do-signup-view [params]
   (if (email-exists? (:email params))
-    (signup-view session "A user with this email already exists.")
-    (do
+    (signup-view "A user with this email already exists.")
+    (try
       (save-new-user (:name params) (:email params) (:password params))
-      (base-template session params))))
+      (login-user (:email params))
+      (redirect-to "/")
+      (catch Exception e
+        (signup-view "There was an error creating your account. Please try again.")))))
 
-(defn do-login-view [session params]
+(defn do-login-view [params]
   (if (password-is-correct? (:email params) (:password params))
-    (assoc (redirect-to "/") :session (login-user session))
-    (login-view session "Incorrect email or password.")))
+    (do
+      (login-user (:email params))
+      (redirect-to "/"))
+    (login-view "Incorrect email or password.")))
 
 (defn logout-view [session]
-  (assoc (redirect-to "/") :session nil))
+  (destroy-session!)
+  (redirect-to "/"))

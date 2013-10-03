@@ -3,6 +3,7 @@
   :url "http://clojurepay.travisthieman.com"
   :dependencies [[org.clojure/clojure "1.5.1"]
                  [compojure "1.1.5"]
+                 [timewarrior/sandbar "0.5.0"]
                  [enlive "1.1.4"]
                  [clojurewerkz/scrypt "1.0.0"]
                  [clj-http "0.7.7"]
