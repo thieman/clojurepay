@@ -26,9 +26,6 @@
       false
       (sc/verify (str l-email (:app_secret config)) (session-get :token)))))
 
-(defmacro auth-site [& body]
-  `(if (logged-in?) ~@body (redirect-to "/")))
-
 (defn login-user
   "Add successful user auth info to current session."
   [email]

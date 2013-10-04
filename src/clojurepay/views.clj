@@ -51,9 +51,6 @@
   ([] (login-view nil))
   ([msg] (base-template (login-form "do-login" msg))))
 
-(defn authed-view []
-  (auth-site (base-template "Yay, logged in!")))
-
 (defn do-signup-view [params]
   (if (email-exists? (:email params))
     (signup-view "A user with this email already exists.")
@@ -76,4 +73,4 @@
   (redirect-to "/"))
 
 (defn circles-view []
-  (auth-site (base-template (circles))))
+  (base-template (circles)))

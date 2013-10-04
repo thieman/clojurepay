@@ -18,8 +18,7 @@
   (GET "/signup" [] (views/signup-view))
   (POST "/do-signup" {params :params} (views/do-signup-view params))
   (GET "/login" [] (views/login-view))
-  (POST "/do-login" {params :params} (views/do-login-view params))
-  (GET "/authed" [] (views/authed-view)))
+  (POST "/do-login" {params :params} (views/do-login-view params)))
 
 (defroutes private-routes*
   (GET "/logout" [] (views/logout-view))
@@ -33,20 +32,16 @@
        {method :request-method params :params id :id}
        (api/circle method params id)))
 
-(defroutes site-routes*
-  (route/resources "/static/")
-  (route/not-found "Not Found"))
-
 (def public-routes (handler/site public-routes*))
 (def private-routes (handler/site private-routes*))
 (def api-routes (wrap-json-response (handler/api api-routes*)))
-(def site-routes site-routes*)
 
 (defroutes main-routes
+  (route/resources "/static/")
+  (ANY "/api/*" [] (if (auth/logged-in?) api-routes {:status 401}))
   (ANY "*" [] public-routes)
   (ANY "*" [] (if (auth/logged-in?) private-routes (views/index-redirect)))
-  (ANY "*" [] (if (auth/logged-in?) api-routes {:status 401}))
-  (ANY "*" [] site-routes))
+  (route/not-found {:status 404}))
 
 (def app
   (wrap-stateful-session main-routes))
