@@ -41,7 +41,7 @@
 (defsnippet circle-list-element "public/templates/circle-list-element.html" [:.circle] [] identity)
 
 (defn index-redirect []
-  (redirect-to (if (logged-in?) "/circles" "/signup")))
+  (redirect-to (if (logged-in?) "/circles" "/login")))
 
 (defn signup-view
   ([] (signup-view nil))
@@ -61,10 +61,10 @@
       (catch Exception e
         (signup-view "There was an error creating your account. Please try again.")))))
 
-(defn do-login-view [params]
-  (if (password-is-correct? (:email params) (:password params))
+(defn do-login-view [email password]
+  (if (password-is-correct? email password)
     (do
-      (login-user (:email params))
+      (login-user email)
       (redirect-to "/"))
     (login-view "Incorrect email or password.")))
 

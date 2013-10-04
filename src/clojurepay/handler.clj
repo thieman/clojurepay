@@ -18,23 +18,28 @@
   (GET "/signup" [] (views/signup-view))
   (POST "/do-signup" {params :params} (views/do-signup-view params))
   (GET "/login" [] (views/login-view))
-  (POST "/do-login" {params :params} (views/do-login-view params)))
+  (POST "/do-login" [email password] (views/do-login-view email password)))
 
 (defroutes private-routes*
   (GET "/logout" [] (views/logout-view))
   (GET "/circles" [] (views/circles-view)))
 
 (defroutes api-routes*
+
   (ANY "/api/circles"
-       {method :request-method params :params}
-       (api/circles method params))
+        {method :request-method}
+        (api/circles method))
+
+  (POST "/api/circle" [name] (api/circle :post name))
   (ANY "/api/circle/:id"
-       {method :request-method params :params id :id}
-       (api/circle method params id)))
+       {method :request-method params :params}
+       (api/circle method params (:id params))))
 
 (def public-routes (handler/site public-routes*))
 (def private-routes (handler/site private-routes*))
-(def api-routes (wrap-json-response (handler/api api-routes*)))
+(def api-routes (-> (handler/site api-routes*)
+                    (wrap-json-response)
+                    (wrap-json-params)))
 
 (defroutes main-routes
   (route/resources "/static/")

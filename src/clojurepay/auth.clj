@@ -10,7 +10,7 @@
 
 (defn email-exists? [email]
   (let [l-email (clojure.string/lower-case email)]
-    (pos? (mc/count "user" {:_id l-email}))))
+    (mc/any? "user" {:_id l-email})))
 
 (defn encrypt-password [password] (sc/encrypt password 16384 8 1))
 
