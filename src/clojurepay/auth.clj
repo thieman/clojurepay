@@ -1,6 +1,8 @@
 (ns clojurepay.auth
   (:use [clojurewerkz.scrypt.core :as sc]
+        ring.util.response
         [clojurepay.config :only [config]]
+        clojurepay.helpers
         sandbar.stateful-session)
   (:require [monger.collection :as mc]))
 
@@ -23,6 +25,9 @@
     (if (nil? l-email)
       false
       (sc/verify (str l-email (:app_secret config)) (session-get :token)))))
+
+(defmacro auth-site [& body]
+  `(if (logged-in?) ~@body (redirect-to "/")))
 
 (defn login-user
   "Add successful user auth info to current session."

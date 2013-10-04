@@ -2,11 +2,10 @@
   (:use [net.cgrand.enlive-html]
         sandbar.stateful-session
         [clojurepay.config :only [config]]
+        clojurepay.helpers
         clojurepay.auth)
-  (:require [monger.collection :as mc]))
-
-(defn redirect-to [location] {:status 302
-                              :headers {"Location" location}})
+  (:require [monger.collection :as mc]
+            [clojurepay.api :as api]))
 
 (defsnippet navbar-link "public/templates/navbar-link.html" [:li] [id href text]
   [:li] (set-attr :id id)
@@ -37,12 +36,12 @@
   [:form] (do-> (prepend (alert msg "warning"))
                 (set-attr :action form-action)))
 
-(defn index-redirect []
-  (if (logged-in?)
-    (redirect-to "/circles")
-    (redirect-to "/signup")))
+(defsnippet circles "public/templates/circles.html" [root] [] identity)
 
-(defn session-print-view [] (base-template (session-get :logged-in)))
+(defsnippet circle-list-element "public/templates/circle-list-element.html" [:.circle] [] identity)
+
+(defn index-redirect []
+  (redirect-to (if (logged-in?) "/circles" "/signup")))
 
 (defn signup-view
   ([] (signup-view nil))
@@ -51,6 +50,9 @@
 (defn login-view
   ([] (login-view nil))
   ([msg] (base-template (login-form "do-login" msg))))
+
+(defn authed-view []
+  (auth-site (base-template "Yay, logged in!")))
 
 (defn do-signup-view [params]
   (if (email-exists? (:email params))
@@ -69,6 +71,9 @@
       (redirect-to "/"))
     (login-view "Incorrect email or password.")))
 
-(defn logout-view [session]
+(defn logout-view []
   (destroy-session!)
   (redirect-to "/"))
+
+(defn circles-view []
+  (auth-site (base-template (circles))))
