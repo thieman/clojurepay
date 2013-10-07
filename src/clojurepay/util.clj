@@ -17,3 +17,13 @@
      (do ~@body)
      {:status 400
       :error (str "Required args: " ~args)}))
+
+(defn swap-keys [in-map old-key new-key]
+  (-> in-map
+      (assoc new-key (get in-map old-key))
+      (dissoc old-key)))
+
+(defn append-get-params [url param-map]
+  (let [url (str url "?")
+        reducer #(str %1 (name (first %2)) "=" (second %2) "&")]
+    (apply str (butlast (reduce reducer url (seq param-map))))))

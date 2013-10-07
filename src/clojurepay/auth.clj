@@ -36,6 +36,16 @@
   (if (email-exists? email)
     (throw (Exception. "This email is taken, please choose another."))
     (mc/insert "user" {:_id (lcase email)
+                       :active false
                        :name name
                        :proper-email email
                        :password (encrypt-password password)})))
+
+(defn is-member? [circle-doc]
+  (boolean (some #(= (:id %) (session-get :user)) (:users circle-doc))))
+
+(defn owns-circle? [circle-doc]
+  (boolean (= (session-get :user) (get-in circle-doc [:owner :id]))))
+
+(defn self? [user-doc]
+  (= (session-get :user) (:_id user-doc)))

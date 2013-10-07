@@ -1,8 +1,8 @@
 (ns clojurepay.api
-  (:use [net.cgrand.enlive-html]
+  (:use net.cgrand.enlive-html
         ring.util.response
         sandbar.stateful-session
-        [clojurepay.util :only [defsitehandler with-args]]
+        [clojurepay.util :only [defsitehandler with-args swap-keys]]
         [clojurepay.config :only [config]])
   (:require [monger.collection :as mc]
             [monger.query :as mq]
@@ -25,12 +25,23 @@
 
 (defmethod circle [:get] [method params id]
   ;; Return information on a given circle.
-  {:body (mc/find-map-by-id "circle" (ObjectId. id))})
+  (with-args [id]
+    {:body (mc/find-map-by-id "circle" (ObjectId. id))}))
 
 (defmethod circle [:post] [method name]
   ;; Create a new circle.
-  (let [new-circle {:_id (ObjectId.)
-                    :name name
-                    :users [{:id (session-get :user)}]
-                    :created (time/now)}]
-    {:body (mc/insert-and-return "circle" new-circle)}))
+  (with-args [name]
+    (let [owner-doc (mc/find-map-by-id "user" (session-get :user))
+          new-circle {:_id (ObjectId.)
+                      :name name
+                      :owner (-> owner-doc
+                                 (select-keys [:_id :name])
+                                 (swap-keys :_id :id))
+                      :users [{:id (session-get :user)}]
+                      :created (time/now)
+                      :updated (time/now)}]
+      {:body (mc/insert-and-return "circle" new-circle)})))
+
+(defmethod circle [:delete] [method params id]
+  (with-args [id]
+    (mc/remove "circle" {:_id (ObjectId. id)})))

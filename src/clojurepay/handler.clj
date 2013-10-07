@@ -18,11 +18,13 @@
   (GET "/signup" [] (views/signup-view))
   (POST "/do-signup" {params :params} (views/do-signup-view params))
   (GET "/login" [] (views/login-view))
-  (POST "/do-login" [email password] (views/do-login-view email password)))
+  (POST "/do-login" [email password] (views/do-login-view email password))
+  (GET "/auth-redirect" {params :params} (views/venmo-auth-redirect params)))
 
 (defroutes private-routes*
   (GET "/logout" [] (views/logout-view))
-  (GET "/circles" [] (views/circles-view)))
+  (GET "/circles" [] (views/circles-view))
+  (GET "/circle/:id" [id] (views/circle-view id)))
 
 (defroutes api-routes*
 

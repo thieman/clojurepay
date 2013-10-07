@@ -1,0 +1,12 @@
+.form-group {
+	display: inline-block;
+}
+
+.form-group > input {
+	margin-left: 10px;
+	margin-right: 20px;
+}
+
+td:last-child {
+	width: 30%;
+}
