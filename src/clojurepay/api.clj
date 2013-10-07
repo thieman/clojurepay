@@ -21,12 +21,14 @@
   (let [user-circles (mq/with-collection "circle"
                        (mq/find {:users {:id (session-get :user)}})
                        (mq/sort (array-map :created -1)))]
-    {:body user-circles}))
+    {:body user-circles
+     :status 200}))
 
 (defmethod circle [:get] [method params id]
   ;; Return information on a given circle.
   (with-args [id]
-    {:body (mc/find-map-by-id "circle" (ObjectId. id))}))
+    {:body (mc/find-map-by-id "circle" (ObjectId. id))
+     :status 200}))
 
 (defmethod circle [:post] [method name]
   ;; Create a new circle.
@@ -40,7 +42,8 @@
                       :users [{:id (session-get :user)}]
                       :created (time/now)
                       :updated (time/now)}]
-      {:body (mc/insert-and-return "circle" new-circle)})))
+      {:body (mc/insert-and-return "circle" new-circle)
+       :status 200})))
 
 (defmethod circle [:delete] [method params id]
   (with-args [id]

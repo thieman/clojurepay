@@ -71,7 +71,8 @@
   [:.updated] (content (unparse time-formatter (:updated circle-doc)))
   [:.nav :a] (set-attr :href (str "/circle/" (:_id circle-doc))))
 
-(defsnippet circles "public/templates/circles.html" [root] [circles-doc]
+(defsnippet circles "public/templates/circles.html" [root] [circles-doc msg]
+  [:.alert] (when msg (substitute (alert msg "warning")))
   [:#add-new] (after (add-circle-form "/add-circle"))
   [:tbody] (content (map circle-table-element circles-doc)))
 
@@ -149,8 +150,9 @@
   (destroy-session!)
   (redirect-to "/"))
 
-(defn circles-view []
-  (base-template ["circles.css"] (circles (:body (api/circles :get)))))
+(defn circles-view
+  ([] (circles-view nil))
+  ([msg] (base-template ["circles.css"] (circles (:body (api/circles :get)) msg))))
 
 (defn circle-view [id]
   (let [circle-doc (mc/find-map-by-id "circle" (ObjectId. id))]
@@ -161,5 +163,9 @@
 
 (defn add-circle [{name :name}]
   (with-args [name]
-    (api/circle :post name)
-    (redirect-to "/circles")))
+    (let [result (api/circle :post name)]
+      (if (= (:status result) 200)
+        (redirect-to "/circles")
+        (circles-view "Something went wrong when creating your circle, please try again.")))))
+
+(defn leave-circle [{name :name}] name)

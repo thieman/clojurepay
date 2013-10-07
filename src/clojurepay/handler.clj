@@ -22,6 +22,7 @@
 
 (defroutes private-routes*
   (POST "/add-circle" {params :params} (views/add-circle params))
+  (POST "/leave-circle" {params :params} (views/leave-circle params))
   (GET "/auth-redirect" {params :params} (views/venmo-auth-redirect params))
   (GET "/logout" [] (views/logout-view))
   (GET "/circles" [] (views/circles-view))
