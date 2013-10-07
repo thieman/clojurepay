@@ -18,10 +18,11 @@
   (GET "/signup" [] (views/signup-view))
   (POST "/do-signup" {params :params} (views/do-signup-view params))
   (GET "/login" [] (views/login-view))
-  (POST "/do-login" [email password] (views/do-login-view email password))
-  (GET "/auth-redirect" {params :params} (views/venmo-auth-redirect params)))
+  (POST "/do-login" [email password] (views/do-login-view email password)))
 
 (defroutes private-routes*
+  (POST "/add-circle" {params :params} (views/add-circle params))
+  (GET "/auth-redirect" {params :params} (views/venmo-auth-redirect params))
   (GET "/logout" [] (views/logout-view))
   (GET "/circles" [] (views/circles-view))
   (GET "/circle/:id" [id] (views/circle-view id)))
@@ -37,9 +38,9 @@
        {method :request-method params :params}
        (api/circle method params (:id params))))
 
-(def public-routes (handler/site public-routes*))
-(def private-routes (handler/site private-routes*))
-(def api-routes (-> (handler/site api-routes*)
+(def public-routes public-routes*)
+(def private-routes private-routes*)
+(def api-routes (-> api-routes*
                     (wrap-json-response)
                     (wrap-json-params)))
 
@@ -51,4 +52,4 @@
   (route/not-found {:status 404}))
 
 (def app
-  (wrap-stateful-session main-routes))
+  (wrap-stateful-session (handler/site main-routes)))

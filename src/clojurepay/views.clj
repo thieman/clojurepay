@@ -39,7 +39,8 @@
 (defsnippet css "public/templates/css.html" [:link] [stylesheet]
   [:link] (set-attr :href (str "/static/css/" stylesheet)))
 
-(deftemplate base-template* "public/templates/base.html" [body-content stylesheets]
+(deftemplate base-template*
+  "public/templates/base.html" [body-content stylesheets]
   [:#body-content] (content body-content)
   [:head] (append (map css stylesheets))
   [:#navbar] (substitute (navbar))
@@ -59,8 +60,9 @@
   [:form] (do-> (prepend (alert msg "warning"))
                 (set-attr :action form-action)))
 
-(defsnippet add-circle-form "public/templates/add-circle-form.html" [:form] []
-  identity)
+(defsnippet add-circle-form
+  "public/templates/add-circle-form.html" [:form] [form-action]
+  [:form] (set-attr :action form-action))
 
 (defsnippet circle-table-element
   "public/templates/circle-table-element.html" [:tr] [circle-doc]
@@ -70,7 +72,7 @@
   [:.nav :a] (set-attr :href (str "/circle/" (:_id circle-doc))))
 
 (defsnippet circles "public/templates/circles.html" [root] [circles-doc]
-  [:#add-new] (after (add-circle-form))
+  [:#add-new] (after (add-circle-form "/add-circle"))
   [:tbody] (content (map circle-table-element circles-doc)))
 
 (defsnippet member-table-element*
@@ -156,3 +158,8 @@
       (if-not (is-member? circle-doc)
         {:status 401}
         (base-template ["circle-detail.css"] (circle-detail circle-doc))))))
+
+(defn add-circle [{name :name}]
+  (with-args [name]
+    (api/circle :post name)
+    (redirect-to "/circles")))
