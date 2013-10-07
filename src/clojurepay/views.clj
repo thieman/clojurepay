@@ -3,11 +3,13 @@
         sandbar.stateful-session
         [clojurepay.config :only [config]]
         [clojurepay.util :only [redirect-to with-args append-get-params]]
-        clojurepay.auth)
+        clojurepay.auth
+        monger.operators)
   (:require [monger.collection :as mc]
             [clojurepay.api :as api]
             [clj-time.format :as fmt]
-            [clj-http.client :as client])
+            [clj-http.client :as client]
+            [cheshire.core :as cheshire])
   (:import [org.bson.types ObjectId]))
 
 (def time-formatter (fmt/formatters :year-month-day))
@@ -93,7 +95,7 @@
   [:tbody] (content (map (partial member-table-element circle-doc) (:users circle-doc))))
 
 (defn index-redirect []
-  (redirect-to (if (logged-in?) "/circles" "/login")))
+  (redirect-to (if (logged-in?) "/circles" "/signup")))
 
 (defn signup-view
   ([] (signup-view nil))
@@ -101,13 +103,21 @@
 
 (defn venmo-auth-redirect
   "Synchronous for now, should really not be. But hey, hacking."
-  [{code :code} params]
+  [{code :code}]
   (let [venmo-response
         (client/post (:venmo-token-url config)
                      {:form-params {:client_id (:venmo-client-id config)
                                     :client_secret (:venmo-client-secret config)
-                                    :code code}})]
-    (mc/insert "venmo" venmo-response)))
+                                    :code code}})
+        venmo-doc (cheshire/parse-string (:body venmo-response))]
+    (if (nil? venmo-doc)
+      {:status 400}
+      (do (mc/insert "venmo" venmo-doc)
+          (mc/update-by-id "user"
+                           (session-get :user)
+                           {$set {:active true
+                                  :token (get venmo-doc "access_token")}})
+          (redirect-to "/")))))
 
 (defn login-view
   ([] (login-view nil))
