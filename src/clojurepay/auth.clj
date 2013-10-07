@@ -2,7 +2,6 @@
   (:use [clojurewerkz.scrypt.core :as sc]
         ring.util.response
         [clojurepay.config :only [config]]
-        clojurepay.helpers
         sandbar.stateful-session)
   (:require [monger.collection :as mc]))
 

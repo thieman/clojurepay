@@ -2,7 +2,7 @@
   (:use [net.cgrand.enlive-html]
         sandbar.stateful-session
         [clojurepay.config :only [config]]
-        clojurepay.helpers
+        [clojurepay.util :only [redirect-to]]
         clojurepay.auth)
   (:require [monger.collection :as mc]
             [clojurepay.api :as api]))
