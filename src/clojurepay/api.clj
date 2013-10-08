@@ -57,7 +57,8 @@
         user-is-owner? (fn [user] (= (:id user) (get-in circle-doc [:owner :id])))
         new-owner-id (->> (:users circle-doc)
                           (filter user-is-owner?)
-                          (first))
+                          (first)
+                          (:id))
         new-owner-doc (mc/find-map-by-id "user" new-owner-id)]
     (if-not (owns-circle?)
       {:status 401}
