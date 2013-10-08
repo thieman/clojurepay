@@ -1,10 +1,25 @@
-<form class='form-inline' method="POST" action="">
+<form class='form-horizontal' method="POST">
 
-  <div class='form-group'>
-    <label class='control-label' for='email'>Charge Amount</label>
-    <input type='text' name='name' id='name' placeholder='Total charge amount'>
+  <input type='hidden' name='id'></input>
+
+  <div class='control-group'>
+    <label class='control-label' for='amount'>Charge Amount</label>
+    <div class='controls'>
+      <input type='text' name='amount' id='amount' placeholder='Total charge amount'></input>
+      </div>
   </div>
 
-  <button type='submit' class='btn btn-success'>Charge Circle</button>
+  <div class='control-group'>
+    <label class='control-label' for='memo'>Memo</label>
+    <div class='controls'>
+      <input type='text' name='memo' id='memo' placeholder='Memo'></input>
+    </div>
+  </div>
+
+  <div class='control-group'>
+    <div class='controls'>
+      <button type='submit' class='btn btn-success'>Charge Circle</button>
+    </div>
+  </div>
 
 </form>

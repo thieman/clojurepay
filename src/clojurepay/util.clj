@@ -33,3 +33,7 @@
   [api-result]
   (when (or (nil? api-result) (not (= 200 (:status api-result))))
     (throw (Exception. "API call returned failure status code"))))
+
+(defn random-string [size]
+  (let [valid-chars "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"]
+    (clojure.string/join (repeatedly size #(rand-nth valid-chars)))))

@@ -10,3 +10,12 @@
 td:last-child {
 	width: 30%;
 }
+
+div .inline-form-wrapper {
+	display: inline-block;
+	margin-left: 10px;
+}
+
+.inline-form-wrapper > form {
+	margin-bottom: 0px;
+}

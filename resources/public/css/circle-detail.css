@@ -14,3 +14,11 @@ h2 {
 td:last-child {
 	width: 18%;
 }
+
+input[name="invite-code"] {
+	width: 80%;
+}
+
+table * form {
+	margin-bottom: 0px;
+}

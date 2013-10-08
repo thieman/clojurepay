@@ -7,6 +7,7 @@
         monger.operators)
   (:require [monger.collection :as mc]
             [clojurepay.api :as api]
+            [clojurepay.venmo :as venmo]
             [clj-time.format :as fmt]
             [clj-http.client :as client]
             [cheshire.core :as cheshire])
@@ -69,7 +70,9 @@
   [:.name] (content (:name circle-doc))
   [:.owner] (content (get-in circle-doc [:owner :name]))
   [:.updated] (content (unparse time-formatter (:updated circle-doc)))
-  [:.nav :a] (set-attr :href (str "/circle/" (:_id circle-doc))))
+  [:.nav :a] (set-attr :href (str "/circle/" (:_id circle-doc)))
+  [:.nav :form] (set-attr :action "/leave-circle")
+  [:.nav [:input (attr= :name "id")]] (set-attr :value (str (:_id circle-doc))))
 
 (defsnippet circles "public/templates/circles.html" [root] [circles-doc msg]
   [:.alert] (when msg (substitute (alert msg "warning")))
@@ -77,25 +80,48 @@
   [:tbody] (content (map circle-table-element circles-doc)))
 
 (defsnippet member-table-element*
-  "public/templates/member-table-element.html" [:tr] [circle-doc user-doc]
+  "public/templates/member-table-element.html" [:tr] [circle-doc user-doc include-remove]
   [:.name] (content (:name user-doc))
   [:.last] (content (unparse time-formatter (:last user-doc)))
-  [:.remove-member] (when (and (owns-circle? circle-doc) (not (self? user-doc)))
-                      identity))
+  [[:input (attr= :name "circle-id")]] (set-attr :value (str (:_id circle-doc)))
+  [[:input (attr= :name "user-id")]] (set-attr :value (:_id user-doc))
+  [:form] (when include-remove (set-attr :action "/do-remove-member")))
 
 (defn member-table-element [circle-doc user-partial-doc]
   (let [user-doc (mc/find-map-by-id "user" (:id user-partial-doc))]
-    (member-table-element* circle-doc (merge user-partial-doc user-doc))))
+    (member-table-element* circle-doc
+                           (merge user-partial-doc user-doc)
+                           (and (owns-circle? circle-doc) (not (self? user-doc))))))
 
 (defsnippet charge-circle-form
-  "public/templates/charge-circle-form.html" [:form] []
-  identity)
+  "public/templates/charge-circle-form.html" [:form] [circle-doc]
+  [:form] (set-attr :action "/do-charge")
+  [[:input (attr= :name "id")]] (set-attr :value (str (:_id circle-doc))))
+
+(defn invite-url [circle-id invite-code]
+  (clojure.string/join "/" [(str (:host-path config))
+                            "circle"
+                            "join"
+                            circle-id
+                            invite-code]))
 
 (defsnippet circle-detail
-  "public/templates/circle-detail.html" [root] [circle-doc]
+  "public/templates/circle-detail.html" [root] [circle-doc alert-msg alert-class]
+  [:.alert] (when alert-msg (substitute (alert alert-msg alert-class)))
   [:#circle-name] (content (:name circle-doc))
-  [:.charge] (content (charge-circle-form))
+  [:.charge] (content (charge-circle-form circle-doc))
+  [[:input (attr= :name "invite-code")]] (set-attr :value
+                                                   (invite-url (str (:_id circle-doc))
+                                                               (:invite_code circle-doc)))
   [:tbody] (content (map (partial member-table-element circle-doc) (:users circle-doc))))
+
+(defsnippet join-form
+  "public/templates/join-form.html" [root] [circle-doc]
+  [:#circle-name] (content (:name circle-doc))
+  [:#circle-owner] (content (get-in circle-doc [:owner :name]))
+  [:form] (set-attr :action "/do-join")
+  [[:input (attr= :name "id")]] (set-attr :value (str (:_id circle-doc)))
+  [[:input (attr= :name "code")]] (set-attr :value (:invite_code circle-doc)))
 
 (defn index-redirect []
   (redirect-to (if (logged-in?) "/circles" "/signup")))
@@ -154,12 +180,17 @@
   ([] (circles-view nil))
   ([msg] (base-template ["circles.css"] (circles (:body (api/circles :get)) msg))))
 
-(defn circle-view [id]
-  (let [circle-doc (mc/find-map-by-id "circle" (ObjectId. id))]
-    (with-args [circle-doc]
-      (if-not (is-member? circle-doc)
-        {:status 401}
-        (base-template ["circle-detail.css"] (circle-detail circle-doc))))))
+(defn circle-view
+  ([params] (circle-view (:id params) params))
+  ([id params] (circle-view id params nil))
+  ([id params msg]
+     (let [circle-doc (mc/find-map-by-id "circle" (ObjectId. id))
+           alert-msg (get params :msg msg)
+           alert-class (get params :class "warning")]
+       (with-args [circle-doc]
+         (if-not (is-member? circle-doc)
+           {:status 401}
+           (base-template ["circle-detail.css"] (circle-detail circle-doc alert-msg alert-class)))))))
 
 (defn add-circle [{name :name}]
   (with-args [name]
@@ -167,6 +198,16 @@
       (if (= (:status result) 200)
         (redirect-to "/circles")
         (circles-view "Something went wrong when creating your circle, please try again.")))))
+
+(defn do-remove-member [circle-id user-id]
+  (let [result (api/circle-remove-member circle-id user-id)]
+    (try
+      (api-raise result)
+      (redirect-to (str "/circle/" circle-id))
+      (catch Exception e
+        (redirect-to (append-get-params (str "/circle/" circle-id)
+                                        {:msg "There was an error removing this member, please try again."
+                                         :class "warning"}))))))
 
 (defn leave-circle
   "Removes the current user from the circle.  If user is the owner,
@@ -190,4 +231,35 @@
         (process-leave)
         (redirect-to "/circles")
         (catch Exception e
-            (circles-view "Something went wrong when leaving this circle, please try again."))))))
+          (circles-view "Something went wrong when leaving this circle, please try again."))))))
+
+(defn join-circle-view [circle-id invite-code]
+  (let [circle-doc (mc/find-map-by-id "circle" (ObjectId. circle-id))]
+    (with-args [circle-doc]
+      (if-not (= invite-code (:invite_code circle-doc))
+        (redirect-to "/")
+        (base-template (join-form circle-doc))))))
+
+(defn do-join-circle [circle-id invite-code]
+  (let [result (api/circle-join circle-id invite-code)]
+    (try
+      (api-raise result)
+      (redirect-to "/circles")
+      (catch Exception e
+        (circles-view "Something went wrong when joining the circle, please try again.")))))
+
+(defn do-charge-circle [circle-id amount memo]
+  (let [circle-doc (mc/find-map-by-id "circle" (ObjectId. circle-id))
+        user-doc (mc/find-map-by-id "user" (session-get :user))
+        parsed-amount (try (Float/parseFloat amount) (catch Exception e 0))
+        valid (and (is-member? circle-doc)
+                   (:active user-doc)
+                   (> parsed-amount 0))]
+    (if-not valid
+      (redirect-to (append-get-params (str "/circle/" circle-id)
+                                      {:msg "You are unable to charge this circle at this time."
+                                       :class "warning"}))
+      (do (venmo/charge-circle circle-id (session-get :user) parsed-amount memo)
+          (redirect-to (append-get-params (str "/circle/" circle-id)
+                                          {:msg "Successful! Your charges should post within the next few minutes."
+                                           :class "success"}))))))

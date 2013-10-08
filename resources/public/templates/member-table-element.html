@@ -2,6 +2,10 @@
   <td class="name"></td>
   <td class="last"></td>
   <td class="nav">
-    <a class='btn btn-danger remove-member'>Remove this User</a>
+    <form method='post'>
+      <input type='hidden' name='circle-id'></input>
+      <input type='hidden' name='user-id'></input>
+      <button type='submit' class='btn btn-danger remove-member'>Remove this User</button>
+    </form>
   </td>
 </tr>

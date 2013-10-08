@@ -13,6 +13,9 @@
 (connect! {:host (:mongo-host config) :port (:mongo-port config)})
 (set-db! (get-db "clojurepay"))
 
+(def object-id #"[0-9a-zA-Z]{24}")
+(def invite-code #"[0-9a-zA-Z]{20}")
+
 (defroutes public-routes*
   (GET "/" [] (views/index-redirect))
   (GET "/signup" [] (views/signup-view))
@@ -26,7 +29,14 @@
   (GET "/auth-redirect" {params :params} (views/venmo-auth-redirect params))
   (GET "/logout" [] (views/logout-view))
   (GET "/circles" [] (views/circles-view))
-  (GET "/circle/:id" [id] (views/circle-view id)))
+  (GET ["/circle/:id" :id object-id] {params :params}
+       (views/circle-view params))
+  (GET ["/circle/join/:id/:code" :id object-id :code invite-code]
+       [id code] (views/join-circle-view id code))
+  (POST "/do-join" [id code] (views/do-join-circle id code))
+  (POST "/do-charge" [id amount memo] (views/do-charge-circle id amount memo))
+  (POST "/do-remove-member" [circle-id user-id]
+        (views/do-remove-member circle-id user-id)))
 
 (defroutes api-routes*
 
@@ -37,12 +47,14 @@
   (POST "/api/circle" [name] (api/circle :post name))
   (ANY "/api/circle/:id"
        {method :request-method params :params}
-       (api/circle method params (:id params)))
+       (api/circle method (:id params)))
 
   (POST "/api/circle/reassign-owner" [circle-id user-id]
         (api/circle-reassign-owner circle-id user-id))
   (POST "/api/circle/remove-member" [circle-id user-id]
-        (api/circle-remove-member circle-id user-id)))
+        (api/circle-remove-member circle-id user-id))
+  (POST "/api/circle/join" [circle-id invite-code]
+        (api/circle-join circle-id invite-code)))
 
 (def public-routes public-routes*)
 (def private-routes private-routes*)
