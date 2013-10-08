@@ -3,7 +3,9 @@
         ring.util.response
         sandbar.stateful-session
         [clojurepay.util :only [defsitehandler with-args swap-keys]]
-        [clojurepay.config :only [config]])
+        [clojurepay.config :only [config]]
+        [clojurepay.auth :only [owns-circle?]]
+        monger.operators)
   (:require [monger.collection :as mc]
             [monger.query :as mq]
             [clj-time.core :as time]
@@ -47,4 +49,29 @@
 
 (defmethod circle [:delete] [method params id]
   (with-args [id]
-    (mc/remove "circle" {:_id (ObjectId. id)})))
+    (mc/remove "circle" {:_id (ObjectId. id)})
+    {:body {} :status 200}))
+
+(defn circle-reassign-owner [circle-id user-id]
+  (let [circle-doc (mc/find-map-by-id "circle" (ObjectId. circle-id))
+        user-is-owner? (fn [user] (= (:id user) (get-in circle-doc [:owner :id])))
+        new-owner-id (->> (:users circle-doc)
+                          (filter user-is-owner?)
+                          (first))
+        new-owner-doc (mc/find-map-by-id "user" new-owner-id)]
+    (if-not (owns-circle?)
+      {:status 401}
+      (do (mc/update-by-id "circle"
+                           circle-id
+                           {$set {:owner {:id new-owner-id
+                                          :name (:name new-owner-doc)}}})
+          {:body {} :status 200}))))
+
+(defn circle-remove-member [circle-id user-id]
+  (let [circle-doc (mc/find-map-by-id "circle" (ObjectId. circle-id))]
+    (if-not (or (owns-circle?) (= user-id (session-get :user)))
+      {:status 401}
+      (do (mc/update-by-id "circle"
+                           circle-id
+                           {$pull {:users {:id (session-get :user)}}})
+          {:body {} :status 200}))))

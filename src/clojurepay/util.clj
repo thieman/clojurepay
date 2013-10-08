@@ -27,3 +27,9 @@
   (let [url (str url "?")
         reducer #(str %1 (name (first %2)) "=" (second %2) "&")]
     (apply str (butlast (reduce reducer url (seq param-map))))))
+
+(defn api-raise
+  "Throw an exception if an API call returns anything other than 200."
+  [api-result]
+  (when (or (nil? api-result) (not (= 200 (:status api-result))))
+    (throw (Exception. "API call returned failure status code"))))

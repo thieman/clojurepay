@@ -2,7 +2,7 @@
   (:use net.cgrand.enlive-html
         sandbar.stateful-session
         [clojurepay.config :only [config]]
-        [clojurepay.util :only [redirect-to with-args append-get-params]]
+        [clojurepay.util :only [redirect-to with-args append-get-params api-raise]]
         clojurepay.auth
         monger.operators)
   (:require [monger.collection :as mc]
@@ -168,4 +168,26 @@
         (redirect-to "/circles")
         (circles-view "Something went wrong when creating your circle, please try again.")))))
 
-(defn leave-circle [{name :name}] name)
+(defn leave-circle
+  "Removes the current user from the circle.  If user is the owner,
+   reassigns owner to the oldest member.  If user is the only member,
+   deletes the circle."
+  [{circle-id :id}]
+  (let [circle-doc (mc/find-map-by-id "circle" (ObjectId. circle-id))
+        delete-circle (= 1 (count (:users circle-doc)))
+        reassign-owner (= (session-get :user) (get-in circle-doc [:owner :id]))
+        process-leave (fn []
+                        (if delete-circle
+                          (api-raise (api/circle :delete circle-id))
+                          (do (when reassign-owner
+                                (api-raise (api/circle-reassign-owner
+                                            circle-id (session-get :user))))
+                              (api-raise (api/circle-remove-member
+                                          circle-id (session-get :user))))))]
+    (if (nil? circle-doc)
+      {:status 400}
+      (try
+        (process-leave)
+        (redirect-to "/circles")
+        (catch Exception e
+            (circles-view "Something went wrong when leaving this circle, please try again."))))))

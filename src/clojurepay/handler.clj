@@ -37,7 +37,12 @@
   (POST "/api/circle" [name] (api/circle :post name))
   (ANY "/api/circle/:id"
        {method :request-method params :params}
-       (api/circle method params (:id params))))
+       (api/circle method params (:id params)))
+
+  (POST "/api/circle/reassign-owner" [circle-id user-id]
+        (api/circle-reassign-owner circle-id user-id))
+  (POST "/api/circle/remove-member" [circle-id user-id]
+        (api/circle-remove-member circle-id user-id)))
 
 (def public-routes public-routes*)
 (def private-routes private-routes*)
