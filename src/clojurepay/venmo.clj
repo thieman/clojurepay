@@ -28,7 +28,7 @@
         (catch Exception e
           (println e))))))
 
-(dotimes [n 5] (async/thread (while true (consume-charge))))
+(dotimes [n 5] (.start (Thread. (fn [] (while true (consume-charge))))))
 
 (defn charge-circle!
   "Split a charge amongst all members of a circle, excluding the
