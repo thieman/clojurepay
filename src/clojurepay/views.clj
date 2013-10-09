@@ -259,7 +259,7 @@
       (redirect-to (append-get-params (str "/circle/" circle-id)
                                       {:msg "You are unable to charge this circle at this time."
                                        :class "warning"}))
-      (do (venmo/charge-circle circle-id (session-get :user) parsed-amount memo)
+      (do (venmo/charge-circle! circle-id (session-get :user) parsed-amount memo)
           (redirect-to (append-get-params (str "/circle/" circle-id)
                                           {:msg "Successful! Your charges should post within the next few minutes."
                                            :class "success"}))))))
