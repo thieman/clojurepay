@@ -63,7 +63,7 @@
                                :charges (map charge targets)})
     new-id))
 
-(defn- charge-member! [{:keys [token email amount memo]} work-doc]
+(defn- charge-member! [{:keys [token email amount memo]}]
   (let [endpoint (clojure.string/join "/" [(:venmo-api-url config) "payments"])
         result (client/post endpoint {:form-params {:access_token token
                                                     :email email
