@@ -2,6 +2,7 @@
   :description "Demand money from your friends! Using Clojure!"
   :url "http://clojurepay.travisthieman.com"
   :dependencies [[org.clojure/clojure "1.5.1"]
+                 [org.clojure/core.async "0.1.242.0-44b1e3-alpha"]
                  [compojure "1.1.5"]
                  [timewarrior/sandbar "0.5.0"]
                  [ring/ring-json "0.2.0"]

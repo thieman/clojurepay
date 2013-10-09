@@ -3,12 +3,32 @@
         [monger.operators])
   (:require [clj-http.client :as client]
             [monger.collection :as mc]
-            [cheshire.core :as cheshire])
+            [cheshire.core :as cheshire]
+            [clojure.core.async :as async])
   (:import [org.bson.types ObjectId]))
 
-(def queue-worker (agent nil))
-
 (declare charge-member! queue-charges! do-work!)
+
+(def charge-channel (async/chan (async/dropping-buffer 100)))
+
+(defn consume-charge []
+  (let [queue-objectid (async/<!! charge-channel)
+        queue-doc (mc/find-and-modify "charge_queue"
+                                      {:_id queue-objectid}
+                                      {$pop {:charges -1}})
+        work-doc (first (:charges queue-doc))
+        new-work-id (ObjectId.)]
+    (if (nil? work-doc)
+      (mc/remove-by-id "charge_queue" queue-objectid)
+      (try
+        (mc/insert "charge_retry" (merge {:_id new-work-id} work-doc))
+        (charge-member! work-doc)
+        (mc/remove-by-id "charge_retry" new-work-id)
+        (async/>!! charge-channel queue-objectid)
+        (catch Exception e
+          (println e))))))
+
+(dotimes [n 5] (async/thread (while true (consume-charge))))
 
 (defn charge-circle!
   "Split a charge amongst all members of a circle, excluding the
@@ -28,25 +48,7 @@
                                        (remove user-is-owner? (:users circle-doc))
                                        payment-amount
                                        memo)]
-    (send queue-worker do-work! queue-objectid)))
-
-(defn do-work!
-  "Fortune favors the bold."
-  [queue-objectid _]
-  (let [queue-doc (mc/find-and-modify "charge_queue"
-                                      {:_id queue-objectid}
-                                      {$pop {:charges -1}})
-        work-doc (first (:charges queue-doc))
-        new-work-id (ObjectId.)]
-    (if (nil? work-doc)
-      (mc/remove-by-id "charge_queue" queue-objectid)
-      (try
-        (mc/insert "charge_retry" (merge {:_id new-work-id} work-doc))
-        (charge-member! work-doc)
-        (mc/remove-by-id "charge_retry" new-work-id)
-        (send queue-worker do-work! queue-objectid)
-        (catch Exception e
-          (println e))))))
+    (async/>!! charge-channel queue-objectid)))
 
 (defn queue-charges!
   "Create a new doc in Mongo to queue a bunch of payments. Returns
