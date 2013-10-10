@@ -11,9 +11,8 @@
 
 (def charge-channel (async/chan (async/dropping-buffer 100)))
 
-(defn consume-charge []
-  (let [queue-objectid (async/<!! charge-channel)
-        queue-doc (mc/find-and-modify "charge_queue"
+(defn consume-charge [queue-objectid]
+  (let [queue-doc (mc/find-and-modify "charge_queue"
                                       {:_id queue-objectid}
                                       {$pop {:charges -1}})
         work-doc (first (:charges queue-doc))
@@ -28,7 +27,15 @@
         (catch Exception e
           (println e))))))
 
-(dotimes [n 5] (.start (Thread. (fn [] (while true (consume-charge))))))
+(defn consumer-loop []
+  (when-let [queue-objectid (async/<!! charge-channel)]
+    (consume-charge queue-objectid)
+    (recur)))
+
+(dotimes [n 5] (doto
+                 (Thread. consumer-loop)
+                 (.setDaemon true)
+                 (.start)))
 
 (defn charge-circle!
   "Split a charge amongst all members of a circle, excluding the
