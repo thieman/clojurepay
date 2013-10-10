@@ -45,7 +45,7 @@
   (boolean (some #(= (:id %) (session-get :user)) (:users circle-doc))))
 
 (defn owns-circle? [circle-doc]
-  (boolean (= (session-get :user) (get-in circle-doc [:owner :id]))))
+  (= (session-get :user) (get-in circle-doc [:owner :id])))
 
 (defn self? [user-doc]
   (= (session-get :user) (:_id user-doc)))

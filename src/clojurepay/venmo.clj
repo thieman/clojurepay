@@ -67,6 +67,6 @@
   (let [endpoint (clojure.string/join "/" [(:venmo-api-url config) "payments"])
         result (client/post endpoint {:form-params {:access_token token
                                                     :email email
-                                                    :amount amount
+                                                    :amount (* -1 amount)
                                                     :note (or memo "Charge via ClojurePay")}})]
     (assert (= 200 (:status result)))))

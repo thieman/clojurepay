@@ -18,7 +18,7 @@
 (defsitehandler circles)
 (defsitehandler circle)
 
-(defmethod circles [:get] [method]
+(defmethod circles :get [method]
   ;; Return all circles of which the user is a member.
   (let [user-circles (mq/with-collection "circle"
                        (mq/find {:users {:id (session-get :user)}})
@@ -26,7 +26,7 @@
     {:body user-circles
      :status 200}))
 
-(defmethod circle [:get] [method id]
+(defmethod circle :get [method id]
   ;; Return information on a given circle.
   (with-args [id]
     (let [circle-doc (mc/find-map-by-id "circle" (ObjectId. id))]
@@ -34,7 +34,7 @@
         {:status 401}
         {:body circle-doc :status 200}))))
 
-(defmethod circle [:post] [method name]
+(defmethod circle :post [method name]
   ;; Create a new circle.
   (with-args [name]
     (let [owner-doc (mc/find-map-by-id "user" (session-get :user))
@@ -50,7 +50,7 @@
       {:body (mc/insert-and-return "circle" new-circle)
        :status 200})))
 
-(defmethod circle [:delete] [method id]
+(defmethod circle :delete [method id]
   (with-args [id]
     (let [circle-doc (mc/find-map-by-id "circle" (ObjectId. id))]
       (if-not (is-member? circle-doc)

@@ -3,7 +3,7 @@
 (defn redirect-to [location] {:status 302
                               :headers {"Location" location}})
 
-(defn dispatch-on-method [method & args] [method])
+(defn dispatch-on-method [method & args] method)
 
 (defmacro def-default-method-handler [method]
   `(defmethod ~method :default [& args#] {:status 405}))
