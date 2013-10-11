@@ -5,9 +5,9 @@
         [clojurepay.util :only [defsitehandler with-args swap-keys random-string]]
         [clojurepay.config :only [config]]
         [clojurepay.auth :only [owns-circle? is-member?]]
+        clojurepay.model
         monger.operators)
   (:require [monger.collection :as mc]
-            [monger.query :as mq]
             [clj-time.core :as time]
             monger.joda-time
             [cheshire.generate :refer [add-encoder encode-str]])
@@ -20,35 +20,24 @@
 
 (defmethod circles :get [method]
   ;; Return all circles of which the user is a member.
-  (let [user-circles (mq/with-collection "circle"
-                       (mq/find {:users {:id (session-get :user)}})
-                       (mq/sort (array-map :created -1)))]
-    {:body user-circles
-     :status 200}))
+  (let [query {:users {:id (session-get :user)}}
+        sort (array-map :created -1)
+        circles (fetch-collection (->RecordCollection) (->Circle) query sort)]
+    {:body circles :status 200}))
 
 (defmethod circle :get [method id]
   ;; Return information on a given circle.
   (with-args [id]
-    (let [circle-doc (mc/find-map-by-id "circle" (ObjectId. id))]
-      (if-not (is-member? circle-doc)
+    (let [circle (fetch (->Circle) id)]
+      (if-not (is-member? circle)
         {:status 401}
-        {:body circle-doc :status 200}))))
+        {:body circle :status 200}))))
 
 (defmethod circle :post [method name]
   ;; Create a new circle.
   (with-args [name]
-    (let [owner-doc (mc/find-map-by-id "user" (session-get :user))
-          new-circle {:_id (ObjectId.)
-                      :name name
-                      :owner (-> owner-doc
-                                 (select-keys [:_id :name])
-                                 (swap-keys :_id :id))
-                      :users [{:id (session-get :user)}]
-                      :invite_code (random-string 20)
-                      :created (time/now)
-                      :updated (time/now)}]
-      {:body (mc/insert-and-return "circle" new-circle)
-       :status 200})))
+    (let [owner (fetch (->User) (session-get :user))]
+      {:body (insert (->Circle) name owner) :status 200})))
 
 (defmethod circle :delete [method id]
   (with-args [id]
