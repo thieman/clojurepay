@@ -1,5 +1,6 @@
 (ns clojurepay.model
-  (:use [clojurepay.util :only [swap-keys random-string assert-args]])
+  (:use [clojurepay.util :only [swap-keys random-string assert-args]]
+        monger.operators)
   (:require [monger.collection :as mc]
             [monger.query :as mq]
             [clj-time.core :as time])
@@ -8,8 +9,18 @@
 (defprotocol StaticParams
   (opts [this key]))
 
-(defprotocol PersistableRecordCollection
-  (fetch-collection [this record-type query sort]))
+(defprotocol PersistableDocumentCollection
+  (fetch-collection [this record-type query sort])
+  (batch-insert [this]))
+
+(defprotocol RobustDocument
+  (create [this args-map])
+  (migrate [this])
+  (main-stage-pop [this])
+  (main-stage-retry-pop [this])
+  (retry-stage-retry-pop [this])
+  (retry-pop [this])
+  (complete [this]))
 
 (defprotocol Document
   (fetch [this id])
@@ -17,6 +28,77 @@
   (parse [this doc])
   (insert [this args-map])
   (update [this query]))
+
+(defrecord ChargeCollection [charges]
+
+  StaticParams
+  (opts [this key]
+    (let [config {:coll "charge"
+                  :retry_coll "charge_retry"}]
+      (get config key)))
+
+  PersistableDocumentCollection
+  (fetch-collection [this record-type query sort]
+    (throw (UnsupportedOperationException.)))
+
+  (batch-insert [this]
+    (mc/insert-batch (opts this :coll) charges)))
+
+(defrecord Charge []
+
+  StaticParams
+  (opts [this key]
+    (let [config {:coll "charge"
+                  :retry_coll "charge_retry"
+                  :retry_after (time/minutes 10)}]
+      (get config key)))
+
+  RobustDocument
+  (create [this {:keys [token amount memo email]}]
+    (merge (->Charge) {:_id (ObjectId.)
+                       :token token
+                       :amount amount
+                       :memo memo
+                       :email email
+                       :created (time/now)}))
+
+  (migrate [this]
+    (mc/update-by-id (opts this :retry_coll)
+                     (:_id this)
+                     (assoc this :last_attempt (time/now))
+                     :upsert true)
+    (mc/remove-by-id (opts this :coll) (:_id this))
+    this)
+
+  (main-stage-pop [this]
+    (when-let [fetched-doc (mc/find-and-modify (opts this :coll)
+                                               {:locked {$exists false}}
+                                               {$set {:locked (time/now)}}
+                                               :sort {:created 1})]
+      (migrate (merge (->Charge) fetched-doc))))
+
+  (main-stage-retry-pop [this]
+    (mc/find-and-modify (opts this :coll)
+                        {:locked {$lte (time/minus (time/now)
+                                                   (opts this :retry_after))}}
+                        {$set {:locked (time/now)}}
+                        :sort {:locked 1}))
+
+  (retry-stage-retry-pop [this]
+    (mc/find-and-modify (opts this :retry_coll)
+                        {:last_attempt {$lte (time/minus (time/now)
+                                                         (opts this :retry_after))}}
+                        {$set {:last_attempt (time/now)}}
+                        :sort {:last_attempt 1}))
+
+  (retry-pop [this]
+    (if-let [charge (main-stage-retry-pop this)]
+      (migrate charge)
+      (when-let [charge (retry-stage-retry-pop this)]
+        (migrate charge))))
+
+  (complete [this]
+    (mc/remove-by-id (opts this :retry_coll) (:_id this))))
 
 (defrecord User []
 
@@ -98,8 +180,11 @@
     (fetch (->Circle) (:_id this))))
 
 (defrecord RecordCollection []
-  PersistableRecordCollection
+
+  PersistableDocumentCollection
   (fetch-collection [this base-record query sort]
     (let [coll (opts base-record :coll)
           docs (mq/with-collection coll (mq/find query) (mq/sort sort))]
-      (map #(parse base-record %) docs))))
+      (map #(parse base-record %) docs)))
+
+  (batch-insert [this] (throw (UnsupportedOperationException.))))

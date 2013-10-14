@@ -1,57 +1,22 @@
 (ns clojurepay.venmo
   (:use [clojurepay.config :only [config]]
-        clojurepay.model
-        [monger.operators])
+        clojurepay.model)
   (:require [clj-http.client :as client]
-            [monger.collection :as mc]
             [cheshire.core :as cheshire]
             [clj-time.core :as time])
   (:import [org.bson.types ObjectId]))
 
-(def retry-charge-after (time/minutes 10))
-
 (declare charge-member! queue-charges!)
 
-(defn- consume-charge! [charge-doc]
-  (charge-member! charge-doc)
-  (mc/remove-by-id "charge_retry" (:_id charge-doc)))
-
-(defn- move-doc-to-retry [coll retry_coll move-doc]
-  (mc/update-by-id retry_coll
-                   (:_id move-doc)
-                   (assoc move-doc :last_attempt (time/now))
-                   :upsert true)
-  (mc/remove-by-id coll (:_id move-doc)))
-
-(defn- mongo-pop-with-retry! [coll retry_coll]
-  (when-let [pop-doc (mc/find-and-modify coll
-                                         {:locked {$exists false}}
-                                         {$set {:locked (time/now)}}
-                                         :sort {:created 1})]
-    (move-doc-to-retry "charge" "charge_retry" pop-doc)
-    pop-doc))
-
-(defn- get-failed-charge-doc! []
-  (mc/find-and-modify "charge"
-                      {:locked {$lte (time/minus
-                                      (time/now)
-                                      retry-charge-after)}}
-                      {$set {:locked (time/now)}}
-                      :sort {:locked 1}))
-
-(defn- get-timed-out-retry-doc! []
-  (mc/find-and-modify "charge_retry"
-                      {:last_attempt {$lte (time/minus
-                                            (time/now)
-                                            retry-charge-after)}}
-                      {$set {:last_attempt (time/now)}}
-                      :sort {:last_attempt 1}))
+(defn- consume-charge! [charge]
+  (charge-member! charge)
+  (complete charge))
 
 (defn- charge-consumer []
   (while true
     (try
-      (when-let [charge-doc (mongo-pop-with-retry! "charge" "charge_retry")]
-        (consume-charge! charge-doc))
+      (when-let [charge (main-stage-pop (->Charge))]
+        (consume-charge! charge))
       (catch ClassCastException e ()) ; Mongo var not bound yet
       (catch Exception e (println e)))
     (Thread/sleep 10)))
@@ -59,11 +24,8 @@
 (defn- charge-retry-consumer []
   (while true
     (try
-      (if-let [charge-doc (get-failed-charge-doc!)]
-        (do (move-doc-to-retry "charge" "charge_retry" charge-doc)
-            (consume-charge! charge-doc))
-        (when-let [retry-doc (get-timed-out-retry-doc!)]
-          (consume-charge! retry-doc)))
+      (when-let [charge (retry-pop (->Charge))]
+        (consume-charge! charge))
       (catch ClassCastException e ()) ; Mongo var not bound yet
       (catch Exception e (println e)))
     (Thread/sleep 10)))
@@ -91,12 +53,11 @@
   "Create new docs in Mongo to queue a circle charge worth of
   payments."
   [token targets amount memo]
-  (let [make-doc (fn [target] {:token token
-                               :amount amount
-                               :memo memo
-                               :created (time/now)
-                               :email (:id target)})]
-    (mc/insert-batch "charge" (map make-doc targets))))
+  (let [make-charge (fn [target] (create (->Charge) {:token token
+                                                     :amount amount
+                                                     :memo memo
+                                                     :email (:id target)}))]
+    (batch-insert (->ChargeCollection (map make-charge targets)))))
 
 (defn- charge-member! [{:keys [token email amount memo]}]
   (let [endpoint (clojure.string/join "/" [(:venmo-api-url config) "payments"])
