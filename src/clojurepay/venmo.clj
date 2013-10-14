@@ -8,7 +8,7 @@
             [clj-time.core :as time])
   (:import [org.bson.types ObjectId]))
 
-(def retry-charge-after (time/minutes 1))
+(def retry-charge-after (time/minutes 10))
 
 (declare charge-member! queue-charges!)
 
@@ -31,7 +31,7 @@
     (move-doc-to-retry "charge" "charge_retry" pop-doc)
     pop-doc))
 
-(defn get-failed-charge-doc! []
+(defn- get-failed-charge-doc! []
   (mc/find-and-modify "charge"
                       {:locked {$lte (time/minus
                                       (time/now)
@@ -39,7 +39,7 @@
                       {$set {:locked (time/now)}}
                       :sort {:locked 1}))
 
-(defn get-timed-out-retry-doc! []
+(defn- get-timed-out-retry-doc! []
   (mc/find-and-modify "charge_retry"
                       {:last_attempt {$lte (time/minus
                                             (time/now)
@@ -67,16 +67,6 @@
       (catch ClassCastException e ()) ; Mongo var not bound yet
       (catch Exception e (println e)))
     (Thread/sleep 10)))
-
-(dotimes [n 5] (doto
-                 (Thread. charge-consumer)
-                 (.setDaemon true)
-                 (.start)))
-
-(dotimes [n 2] (doto
-                 (Thread. charge-retry-consumer)
-                 (.setDaemon true)
-                 (.start)))
 
 (defn charge-circle!
   "Split a charge amongst all members of a circle, excluding the
@@ -115,3 +105,13 @@
                                                     :amount (* -1 amount)
                                                     :note (or memo "Charge via ClojurePay")}})]
     (assert (= 200 (:status result)))))
+
+(dotimes [n 5] (doto
+                 (Thread. charge-consumer)
+                 (.setDaemon true)
+                 (.start)))
+
+(dotimes [n 5] (doto
+                 (Thread. charge-retry-consumer)
+                 (.setDaemon true)
+                 (.start)))

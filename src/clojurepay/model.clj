@@ -5,11 +5,13 @@
             [clj-time.core :as time])
   (:import [org.bson.types ObjectId]))
 
+(defprotocol StaticParams
+  (opts [this key]))
+
 (defprotocol PersistableRecordCollection
   (fetch-collection [this record-type query sort]))
 
 (defprotocol Document
-  (opts [this k])
   (fetch [this id])
   (delete [this])
   (parse [this doc])
@@ -18,11 +20,12 @@
 
 (defrecord User []
 
-  Document
-  (opts [this k]
+  StaticParams
+  (opts [this key]
     (let [config {:coll "user"}]
-      (get config k)))
+      (get config key)))
 
+  Document
   (fetch [this _id]
     (let [user-doc (mc/find-map-by-id (opts this :coll) _id)
           new-user (assoc (->User) :_id _id)]
@@ -52,11 +55,12 @@
 
 (defrecord Circle []
 
-  Document
-  (opts [this k]
+  StaticParams
+  (opts [this key]
     (let [config {:coll "circle"}]
-      (get config k)))
+      (get config key)))
 
+  Document
   (fetch [this _id]
     (let [circle-doc (mc/find-map-by-id (opts this :coll) (ObjectId. (str _id)))
           new-circle (assoc (->Circle) :_id _id)]
