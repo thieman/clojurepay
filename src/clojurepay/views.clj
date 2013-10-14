@@ -232,7 +232,7 @@
           (circles-view "Something went wrong when leaving this circle, please try again."))))))
 
 (defn join-circle-view [circle-id invite-code]
-  (let [circle (fetch (->Circle) circle-id)
+  (let [circle (fetch (->Circle) circle-id)]
     (with-args [circle]
       (if-not (= invite-code (:invite_code circle))
         (redirect-to "/")

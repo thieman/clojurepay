@@ -5,36 +5,76 @@
   (:require [clj-http.client :as client]
             [monger.collection :as mc]
             [cheshire.core :as cheshire]
-            [clojure.core.async :as async])
+            [clj-time.core :as time])
   (:import [org.bson.types ObjectId]))
 
-(declare charge-member! queue-charges! do-work!)
+(def retry-charge-after (time/minutes 1))
 
-(def charge-channel (async/chan (async/dropping-buffer 100)))
+(declare charge-member! queue-charges!)
 
-(defn consume-charge [queue-objectid]
-  (let [queue-doc (mc/find-and-modify "charge_queue"
-                                      {:_id queue-objectid}
-                                      {$pop {:charges -1}})
-        work-doc (first (:charges queue-doc))
-        new-work-id (ObjectId.)]
-    (if (nil? work-doc)
-      (mc/remove-by-id "charge_queue" queue-objectid)
-      (try
-        (mc/insert "charge_retry" (merge {:_id new-work-id} work-doc))
-        (charge-member! work-doc)
-        (mc/remove-by-id "charge_retry" new-work-id)
-        (async/>!! charge-channel queue-objectid)
-        (catch Exception e
-          (println e))))))
+(defn- consume-charge! [charge-doc]
+  (charge-member! charge-doc)
+  (mc/remove-by-id "charge_retry" (:_id charge-doc)))
 
-(defn consumer-loop []
-  (when-let [queue-objectid (async/<!! charge-channel)]
-    (consume-charge queue-objectid)
-    (recur)))
+(defn- move-doc-to-retry [coll retry_coll move-doc]
+  (mc/update-by-id retry_coll
+                   (:_id move-doc)
+                   (assoc move-doc :last_attempt (time/now))
+                   :upsert true)
+  (mc/remove-by-id coll (:_id move-doc)))
+
+(defn- mongo-pop-with-retry! [coll retry_coll]
+  (when-let [pop-doc (mc/find-and-modify coll
+                                         {:locked {$exists false}}
+                                         {$set {:locked (time/now)}}
+                                         :sort {:created 1})]
+    (move-doc-to-retry "charge" "charge_retry" pop-doc)
+    pop-doc))
+
+(defn get-failed-charge-doc! []
+  (mc/find-and-modify "charge"
+                      {:locked {$lte (time/minus
+                                      (time/now)
+                                      retry-charge-after)}}
+                      {$set {:locked (time/now)}}
+                      :sort {:locked 1}))
+
+(defn get-timed-out-retry-doc! []
+  (mc/find-and-modify "charge_retry"
+                      {:last_attempt {$lte (time/minus
+                                            (time/now)
+                                            retry-charge-after)}}
+                      {$set {:last_attempt (time/now)}}
+                      :sort {:last_attempt 1}))
+
+(defn- charge-consumer []
+  (while true
+    (try
+      (when-let [charge-doc (mongo-pop-with-retry! "charge" "charge_retry")]
+        (consume-charge! charge-doc))
+      (catch ClassCastException e ()) ; Mongo var not bound yet
+      (catch Exception e (println e)))
+    (Thread/sleep 10)))
+
+(defn- charge-retry-consumer []
+  (while true
+    (try
+      (if-let [charge-doc (get-failed-charge-doc!)]
+        (do (move-doc-to-retry "charge" "charge_retry" charge-doc)
+            (consume-charge! charge-doc))
+        (when-let [retry-doc (get-timed-out-retry-doc!)]
+          (consume-charge! retry-doc)))
+      (catch ClassCastException e ()) ; Mongo var not bound yet
+      (catch Exception e (println e)))
+    (Thread/sleep 10)))
 
 (dotimes [n 5] (doto
-                 (Thread. consumer-loop)
+                 (Thread. charge-consumer)
+                 (.setDaemon true)
+                 (.start)))
+
+(dotimes [n 2] (doto
+                 (Thread. charge-retry-consumer)
                  (.setDaemon true)
                  (.start)))
 
@@ -51,25 +91,22 @@
         payment-amount (-> (/ amount (count (:users circle)))
                            (* 100.0)
                            (Math/floor)
-                           (/ 100.0))
-        queue-objectid (queue-charges! charger-token
-                                       (remove user-is-owner? (:users circle))
-                                       payment-amount
-                                       memo)]
-    (async/>!! charge-channel queue-objectid)))
+                           (/ 100.0))]
+    (queue-charges! charger-token
+                    (remove user-is-owner? (:users circle))
+                    payment-amount
+                    memo)))
 
-(defn queue-charges!
-  "Create a new doc in Mongo to queue a bunch of payments. Returns
-  ObjectId of the created doc."
+(defn- queue-charges!
+  "Create new docs in Mongo to queue a circle charge worth of
+  payments."
   [token targets amount memo]
-  (let [new-id (ObjectId.)
-        charge (fn [target] {:token token
-                             :amount amount
-                             :memo memo
-                             :email (:id target)})]
-    (mc/insert "charge_queue" {:_id new-id
-                               :charges (map charge targets)})
-    new-id))
+  (let [make-doc (fn [target] {:token token
+                               :amount amount
+                               :memo memo
+                               :created (time/now)
+                               :email (:id target)})]
+    (mc/insert-batch "charge" (map make-doc targets))))
 
 (defn- charge-member! [{:keys [token email amount memo]}]
   (let [endpoint (clojure.string/join "/" [(:venmo-api-url config) "payments"])

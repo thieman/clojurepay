@@ -26,7 +26,8 @@
   (fetch [this _id]
     (let [user-doc (mc/find-map-by-id (opts this :coll) _id)
           new-user (assoc (->User) :_id _id)]
-      (merge new-user user-doc)))
+      (when user-doc
+        (merge new-user user-doc))))
 
   (delete [this]
     (let [id (:_id this)]
@@ -34,13 +35,20 @@
 
   (parse [this doc] (merge (->User) doc))
 
-  (insert [this args-map] ())
+  (insert [this {:keys [email name password]}]
+    (assert-args [email name password])
+    (mc/insert (opts this :coll)
+               {:_id (clojure.string/lower-case email)
+                :active false
+                :name name
+                :proper-email email
+                :password password}))
 
   (update [this query]
-    (mc/update-by-id (this opts :coll)
+    (mc/update-by-id (opts this :coll)
                      (:_id this)
                      query)
-    (fetch (->User) (:_id this)))
+    (fetch (->User) (:_id this))))
 
 (defrecord Circle []
 
@@ -52,7 +60,8 @@
   (fetch [this _id]
     (let [circle-doc (mc/find-map-by-id (opts this :coll) (ObjectId. (str _id)))
           new-circle (assoc (->Circle) :_id _id)]
-      (merge new-circle circle-doc)))
+      (when circle-doc
+        (merge new-circle circle-doc))))
 
   (delete [this]
     (let [id (:_id this)]
@@ -79,7 +88,7 @@
                   :updated now})))
 
   (update [this query]
-    (mc/update-by-id (this opts :coll)
+    (mc/update-by-id (opts this :coll)
                      (:_id this)
                      query)
     (fetch (->Circle) (:_id this))))
