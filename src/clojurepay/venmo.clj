@@ -1,5 +1,6 @@
 (ns clojurepay.venmo
   (:use [clojurepay.config :only [config]]
+        clojurepay.model
         [monger.operators])
   (:require [clj-http.client :as client]
             [monger.collection :as mc]
@@ -43,16 +44,16 @@
   two-stage pop.  WARNING: Private API call! Performs no validation
   once called."
   [circle-id user-id amount memo]
-  (let [circle-doc (mc/find-map-by-id "circle" (ObjectId. circle-id))
-        user-doc (mc/find-map-by-id "user" user-id)
-        user-is-owner? (fn [user] (= (:id user) (get-in circle-doc [:owner :id])))
-        charger-token (:token user-doc)
-        payment-amount (-> (/ amount (count (:users circle-doc)))
+  (let [circle (fetch (->Circle) circle-id)
+        user (fetch (->User) user-id)
+        user-is-owner? (fn [user] (= (:id user) (get-in circle [:owner :id])))
+        charger-token (:token user)
+        payment-amount (-> (/ amount (count (:users circle)))
                            (* 100.0)
                            (Math/floor)
                            (/ 100.0))
         queue-objectid (queue-charges! charger-token
-                                       (remove user-is-owner? (:users circle-doc))
+                                       (remove user-is-owner? (:users circle))
                                        payment-amount
                                        memo)]
     (async/>!! charge-channel queue-objectid)))

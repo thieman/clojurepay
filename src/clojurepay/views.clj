@@ -4,9 +4,9 @@
         [clojurepay.config :only [config]]
         [clojurepay.util :only [redirect-to with-args append-get-params api-raise]]
         clojurepay.auth
+        clojurepay.model
         monger.operators)
-  (:require [monger.collection :as mc]
-            [clojurepay.api :as api]
+  (:require [clojurepay.api :as api]
             [clojurepay.venmo :as venmo]
             [clj-time.format :as fmt]
             [clj-http.client :as client]
@@ -88,7 +88,7 @@
   [:form] (when include-remove (set-attr :action "/do-remove-member")))
 
 (defn member-table-element [circle-doc user-partial-doc]
-  (let [user-doc (mc/find-map-by-id "user" (:id user-partial-doc))]
+  (let [user-doc (fetch (->User) (:id user-partial-doc))]
     (member-table-element* circle-doc
                            (merge user-partial-doc user-doc)
                            (and (owns-circle? circle-doc) (not (self? user-doc))))))
@@ -141,11 +141,9 @@
         venmo-doc (cheshire/parse-string (:body venmo-response))]
     (if (nil? venmo-doc)
       {:status 400}
-      (do (mc/insert "venmo" venmo-doc)
-          (mc/update-by-id "user"
-                           (session-get :user)
-                           {$set {:active true
-                                  :token (get venmo-doc "access_token")}})
+      (do (-> (fetch (->User) (session-get :user))
+              (update {$set {:active true
+                             :token (get venmo-doc "access_token")}}))
           (redirect-to "/")))))
 
 (defn login-view
@@ -184,13 +182,13 @@
   ([params] (circle-view (:id params) params))
   ([id params] (circle-view id params nil))
   ([id params msg]
-     (let [circle-doc (mc/find-map-by-id "circle" (ObjectId. id))
+     (let [circle (fetch (->Circle) id)
            alert-msg (get params :msg msg)
            alert-class (get params :class "warning")]
-       (with-args [circle-doc]
-         (if-not (is-member? circle-doc)
+       (with-args [circle]
+         (if-not (is-member? circle)
            {:status 401}
-           (base-template ["circle-detail.css"] (circle-detail circle-doc alert-msg alert-class)))))))
+           (base-template ["circle-detail.css"] (circle-detail circle alert-msg alert-class)))))))
 
 (defn add-circle [{name :name}]
   (with-args [name]
@@ -214,9 +212,9 @@
    reassigns owner to the oldest member.  If user is the only member,
    deletes the circle."
   [{circle-id :id}]
-  (let [circle-doc (mc/find-map-by-id "circle" (ObjectId. circle-id))
-        delete-circle (= 1 (count (:users circle-doc)))
-        reassign-owner (= (session-get :user) (get-in circle-doc [:owner :id]))
+  (let [circle (fetch (->Circle) circle-id)
+        delete-circle (= 1 (count (:users circle)))
+        reassign-owner (= (session-get :user) (get-in circle [:owner :id]))
         process-leave (fn []
                         (if delete-circle
                           (api-raise (api/circle :delete circle-id))
@@ -225,7 +223,7 @@
                                             circle-id (session-get :user))))
                               (api-raise (api/circle-remove-member
                                           circle-id (session-get :user))))))]
-    (if (nil? circle-doc)
+    (if (nil? circle)
       {:status 400}
       (try
         (process-leave)
@@ -234,11 +232,11 @@
           (circles-view "Something went wrong when leaving this circle, please try again."))))))
 
 (defn join-circle-view [circle-id invite-code]
-  (let [circle-doc (mc/find-map-by-id "circle" (ObjectId. circle-id))]
-    (with-args [circle-doc]
-      (if-not (= invite-code (:invite_code circle-doc))
+  (let [circle (fetch (->Circle) circle-id)
+    (with-args [circle]
+      (if-not (= invite-code (:invite_code circle))
         (redirect-to "/")
-        (base-template (join-form circle-doc))))))
+        (base-template (join-form circle))))))
 
 (defn do-join-circle [circle-id invite-code]
   (let [result (api/circle-join circle-id invite-code)]
@@ -249,8 +247,8 @@
         (circles-view "Something went wrong when joining the circle, please try again.")))))
 
 (defn do-charge-circle [circle-id amount memo]
-  (let [circle-doc (mc/find-map-by-id "circle" (ObjectId. circle-id))
-        user-doc (mc/find-map-by-id "user" (session-get :user))
+  (let [circle-doc (fetch (->Circle) circle-id)
+        user-doc (fetch (->User) (session-get :user))
         parsed-amount (try (Float/parseFloat amount) (catch Exception e 0))
         valid (and (is-member? circle-doc)
                    (:active user-doc)

@@ -12,11 +12,15 @@
   `(do (defmulti ~sym dispatch-on-method)
        (def-default-method-handler ~sym)))
 
+(defmacro assert-args [args]
+  `(when-not (every? (complement nil?) ~args)
+     (throw (Exception. (str "Required args: " (quote ~args))))))
+
 (defmacro with-args [args & body]
   `(if (every? (complement nil?) ~args)
      (do ~@body)
      {:status 400
-      :error (str "Required args: " ~args)}))
+      :error (str "Required args: " (quote ~args))}))
 
 (defn swap-keys [in-map old-key new-key]
   (-> in-map

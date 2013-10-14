@@ -7,8 +7,7 @@
         [clojurepay.auth :only [owns-circle? is-member?]]
         clojurepay.model
         monger.operators)
-  (:require [monger.collection :as mc]
-            [clj-time.core :as time]
+  (:require [clj-time.core :as time]
             monger.joda-time
             [cheshire.generate :refer [add-encoder encode-str]])
   (:import [org.bson.types ObjectId]))
@@ -37,11 +36,11 @@
   ;; Create a new circle.
   (with-args [name]
     (let [owner (fetch (->User) (session-get :user))]
-      {:body (insert (->Circle) name owner) :status 200})))
+      {:body (insert (->Circle) {:name name :owner-doc owner}) :status 200})))
 
 (defmethod circle :delete [method id]
   (with-args [id]
-    (let [circle (fetch (->User) id)]
+    (let [circle (fetch (->Circle) id)]
       (if-not (is-member? circle)
         {:status 401}
         (do (delete circle)

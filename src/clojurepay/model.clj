@@ -1,22 +1,20 @@
 (ns clojurepay.model
-  (:use [clojurepay.util :only [swap-keys random-string]])
+  (:use [clojurepay.util :only [swap-keys random-string assert-args]])
   (:require [monger.collection :as mc]
             [monger.query :as mq]
             [clj-time.core :as time])
   (:import [org.bson.types ObjectId]))
 
 (defprotocol PersistableRecordCollection
-  (fetch-collection [_ record-type query sort]))
+  (fetch-collection [this record-type query sort]))
 
 (defprotocol Document
   (opts [this k])
   (fetch [this id])
   (delete [this])
-  (parse [this doc]))
-
-(defprotocol PersistableCircle
-  (insert [this name owner-doc])
-  (update [this args]))
+  (parse [this doc])
+  (insert [this args-map])
+  (update [this query]))
 
 (defrecord User []
 
@@ -26,15 +24,23 @@
       (get config k)))
 
   (fetch [this _id]
-    (let [user-doc (mc/find-map-by-id (opts this :coll) (ObjectId. (str _id)))
-          new-user (assoc (->User) {:_id _id})]
+    (let [user-doc (mc/find-map-by-id (opts this :coll) _id)
+          new-user (assoc (->User) :_id _id)]
       (merge new-user user-doc)))
 
   (delete [this]
     (let [id (:_id this)]
       (when id (mc/remove (opts this :coll) {:_id (ObjectId. (str id))}))))
 
-  (parse [this doc] (merge (->User) doc)))
+  (parse [this doc] (merge (->User) doc))
+
+  (insert [this args-map] ())
+
+  (update [this query]
+    (mc/update-by-id (this opts :coll)
+                     (:_id this)
+                     query)
+    (fetch (->User) (:_id this)))
 
 (defrecord Circle []
 
@@ -45,7 +51,7 @@
 
   (fetch [this _id]
     (let [circle-doc (mc/find-map-by-id (opts this :coll) (ObjectId. (str _id)))
-          new-circle (assoc (->Circle) {:_id _id})]
+          new-circle (assoc (->Circle) :_id _id)]
       (merge new-circle circle-doc)))
 
   (delete [this]
@@ -54,8 +60,8 @@
 
   (parse [this doc] (merge (->Circle) doc))
 
-  PersistableCircle
-  (insert [this name owner-doc]
+  (insert [this {:keys [name owner-doc]}]
+    (assert-args [name owner-doc])
     (let [circle-id (ObjectId. )
           invite-code (random-string 20)
           now (time/now)]
@@ -76,7 +82,7 @@
     (mc/update-by-id (this opts :coll)
                      (:_id this)
                      query)
-    (fetch (->User) (:_id this))))
+    (fetch (->Circle) (:_id this))))
 
 (defrecord RecordCollection []
   PersistableRecordCollection
