@@ -74,18 +74,24 @@
       (migrate (merge (->Charge) fetched-doc))))
 
   (main-stage-retry-pop [this]
-    (mc/find-and-modify (opts this :coll)
-                        {:locked {$lte (time/minus (time/now)
-                                                   (opts this :retry_after))}}
-                        {$set {:locked (time/now)}}
-                        :sort {:locked 1}))
+    (let [query {:locked {$lte (time/minus (time/now)
+                                           (opts this :retry_after))}}
+          fetched-doc (mc/find-and-modify (opts this :coll)
+                                          query
+                                          {$set {:locked (time/now)}}
+                                          :sort {:locked 1})]
+      (when fetched-doc
+        (merge this fetched-doc))))
 
   (retry-stage-retry-pop [this]
-    (mc/find-and-modify (opts this :retry_coll)
-                        {:last_attempt {$lte (time/minus (time/now)
-                                                         (opts this :retry_after))}}
-                        {$set {:last_attempt (time/now)}}
-                        :sort {:last_attempt 1}))
+    (let [query {:last_attempt {$lte (time/minus (time/now)
+                                                 (opts this :retry_after))}}
+          fetched-doc (mc/find-and-modify (opts this :retry_coll)
+                                          query
+                                          {$set {:last_attempt (time/now)}}
+                                          :sort {:last_attempt 1})]
+      (when fetched-doc
+        (merge this fetched-doc))))
 
   (retry-pop [this]
     (if-let [charge (main-stage-retry-pop this)]
@@ -94,7 +100,8 @@
         (migrate charge))))
 
   (complete [this]
-    (mc/remove-by-id (opts this :retry_coll) (:_id this))))
+    (mc/remove-by-id (opts this :retry_coll) (:_id this))
+    this))
 
 (defrecord User []
 
