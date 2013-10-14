@@ -11,7 +11,7 @@
 
 (defprotocol PersistableDocumentCollection
   (fetch-collection [this record-type query sort])
-  (batch-insert [this]))
+  (batch-insert [this members]))
 
 (defprotocol RobustDocument
   (create [this args-map])
@@ -29,20 +29,16 @@
   (insert [this args-map])
   (update [this query]))
 
-(defrecord ChargeCollection [charges]
-
-  StaticParams
-  (opts [this key]
-    (let [config {:coll "charge"
-                  :retry_coll "charge_retry"}]
-      (get config key)))
+(defrecord RecordCollection []
 
   PersistableDocumentCollection
-  (fetch-collection [this record-type query sort]
-    (throw (UnsupportedOperationException.)))
+  (fetch-collection [this base-record query sort]
+    (let [coll (opts base-record :coll)
+          docs (mq/with-collection coll (mq/find query) (mq/sort sort))]
+      (map #(parse base-record %) docs)))
 
-  (batch-insert [this]
-    (mc/insert-batch (opts this :coll) charges)))
+  (batch-insert [this members]
+    (mc/insert-batch (opts (first members) :coll) members)))
 
 (defrecord Charge []
 
@@ -178,13 +174,3 @@
                      (:_id this)
                      query)
     (fetch (->Circle) (:_id this))))
-
-(defrecord RecordCollection []
-
-  PersistableDocumentCollection
-  (fetch-collection [this base-record query sort]
-    (let [coll (opts base-record :coll)
-          docs (mq/with-collection coll (mq/find query) (mq/sort sort))]
-      (map #(parse base-record %) docs)))
-
-  (batch-insert [this] (throw (UnsupportedOperationException.))))

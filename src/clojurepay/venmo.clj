@@ -57,7 +57,7 @@
                                                      :amount amount
                                                      :memo memo
                                                      :email (:id target)}))]
-    (batch-insert (->ChargeCollection (map make-charge targets)))))
+    (batch-insert (->RecordCollection) (map make-charge targets))))
 
 (defn- charge-member! [{:keys [token email amount memo]}]
   (let [endpoint (clojure.string/join "/" [(:venmo-api-url config) "payments"])
